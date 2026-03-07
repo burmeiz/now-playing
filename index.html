@@ -15,7 +15,7 @@ body {
   font-family: 'DM Sans', sans-serif;
   font-weight: 300;
 }
-#placeholder, #cover {
+#placeholder, #canvas {
   width: 560px;
   height: 560px;
   display: block;
@@ -30,10 +30,9 @@ body {
   text-align: center;
   font-family: 'DM Serif Display', serif;
 }
-#cover {
+#canvas {
   display: none;
   border: 1px solid #eee;
-  object-fit: cover;
 }
 #infobar {
   width: 560px;
@@ -56,7 +55,7 @@ body {
 #track {
   font-family: 'DM Serif Display', serif;
   font-size: 1.5em;
-  color: #111;
+  color: #000;
   line-height: 1.25;
 }
 #artist {
@@ -64,7 +63,7 @@ body {
   font-family: 'DM Sans', sans-serif;
   font-weight: 300;
   font-size: 1em;
-  color: #444;
+  color: #111;
   letter-spacing: 0.04em;
   text-transform: uppercase;
 }
@@ -80,7 +79,7 @@ body {
   font-family: 'DM Sans', sans-serif;
   font-weight: 300;
   font-size: 0.85em;
-  color: #444;
+  color: #111;
   letter-spacing: 0.04em;
   text-transform: uppercase;
   white-space: nowrap;
@@ -90,7 +89,7 @@ body {
 <body>
 
 <div id="placeholder">♪</div>
-<img id="cover" alt="">
+<canvas id="canvas" width="560" height="560"></canvas>
 
 <div id="infobar">
   <div id="left">
@@ -121,6 +120,35 @@ function now() {
   return (h<10?'0'+h:h)+':'+(m<10?'0'+m:m);
 }
 
+function loadGrayscale(src, fallback) {
+  var canvas = document.getElementById('canvas');
+  var ctx = canvas.getContext('2d');
+  var ph = document.getElementById('placeholder');
+  var img = new Image();
+  img.crossOrigin = 'anonymous';
+  img.onload = function() {
+    ctx.drawImage(img, 0, 0, 560, 560);
+    var imageData = ctx.getImageData(0, 0, 560, 560);
+    var data = imageData.data;
+    for (var i = 0; i < data.length; i += 4) {
+      var gray = data[i] * 0.299 + data[i+1] * 0.587 + data[i+2] * 0.114;
+      data[i] = data[i+1] = data[i+2] = gray;
+    }
+    ctx.putImageData(imageData, 0, 0);
+    canvas.style.display = 'block';
+    ph.style.display = 'none';
+  };
+  img.onerror = function() {
+    if (fallback && src !== fallback) {
+      loadGrayscale(fallback, null);
+    } else {
+      canvas.style.display = 'none';
+      ph.style.display = 'block';
+    }
+  };
+  img.src = src;
+}
+
 function fetchWeather() {
   var t = Date.now();
   if (weatherCache && t - weatherLastFetch < 10 * 60 * 1000) {
@@ -137,8 +165,7 @@ function fetchWeather() {
     var cw = d.current_weather;
     if (!cw) return;
     var temp = Math.round(cw.temperature);
-    var code = cw.weathercode;
-    weatherCache = weatherIcon(code) + ' ' + temp + 'C';
+    weatherCache = weatherIcon(cw.weathercode) + ' ' + temp + 'C';
     weatherLastFetch = Date.now();
     document.getElementById('weather').innerHTML = weatherCache;
   };
@@ -184,7 +211,7 @@ function update() {
     if (!playing) {
       document.getElementById('track').innerHTML = 'nada tocando';
       document.getElementById('artist').innerHTML = '';
-      document.getElementById('cover').style.display = 'none';
+      document.getElementById('canvas').style.display = 'none';
       document.getElementById('placeholder').style.display = 'block';
       lastTrack = '';
       return;
@@ -205,16 +232,11 @@ function update() {
       if (imgs[i]['#text'] && imgs[i]['#text'] !== '') { art = imgs[i]['#text']; break; }
     }
 
-    var cover = document.getElementById('cover');
-    var ph = document.getElementById('placeholder');
     if (art) {
-      cover.src = hiRes(art);
-      cover.style.display = 'block';
-      ph.style.display = 'none';
-      cover.onerror = function() { cover.onerror = null; cover.src = art; };
+      loadGrayscale(hiRes(art), art);
     } else {
-      cover.style.display = 'none';
-      ph.style.display = 'block';
+      document.getElementById('canvas').style.display = 'none';
+      document.getElementById('placeholder').style.display = 'block';
     }
   };
   xhr.send();
