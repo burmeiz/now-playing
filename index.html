@@ -4,14 +4,16 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=600, initial-scale=1.0">
 <title>Now Playing</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:wght@300;400&display=swap" rel="stylesheet">
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
 body {
   background: #fff;
-  font-family: Georgia, serif;
-  text-align: center;
   width: 600px;
   padding: 10px;
+  font-family: 'DM Sans', sans-serif;
+  font-weight: 300;
 }
 #placeholder, #cover {
   width: 560px;
@@ -25,51 +27,139 @@ body {
   line-height: 560px;
   font-size: 80px;
   color: #ddd;
+  text-align: center;
+  font-family: 'DM Serif Display', serif;
 }
 #cover {
   display: none;
   border: 1px solid #eee;
   object-fit: cover;
 }
+#infobar {
+  width: 560px;
+  margin: 14px auto 0 auto;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+#left {
+  text-align: left;
+}
 #track {
-  margin-top: 14px;
-  font-size: 1.35em;
+  font-family: 'DM Serif Display', serif;
+  font-size: 1.5em;
   color: #111;
-  line-height: 1.3;
-  padding: 0 10px;
+  line-height: 1.25;
 }
 #artist {
-  margin-top: 6px;
-  font-size: 1.05em;
-  color: #555;
-  padding: 0 10px;
+  margin-top: 4px;
+  font-family: 'DM Sans', sans-serif;
+  font-weight: 300;
+  font-size: 1em;
+  color: #888;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+#right {
+  text-align: right;
+  flex-shrink: 0;
+  margin-left: 12px;
 }
 #status {
-  margin-top: 10px;
-  font-size: 0.8em;
+  font-family: 'DM Serif Display', serif;
+  font-style: italic;
+  font-size: 1.4em;
   color: #111;
+  white-space: nowrap;
+}
+#weather {
+  margin-top: 4px;
+  font-family: 'DM Sans', sans-serif;
+  font-weight: 300;
+  font-size: 0.85em;
+  color: #888;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  white-space: nowrap;
 }
 </style>
 </head>
 <body>
 
-<div id="placeholder">&#9834;</div>
+<div id="placeholder">♪</div>
 <img id="cover" alt="">
-<div id="track"></div>
-<div id="artist"></div>
-<div id="status">aguardando...</div>
+
+<div id="infobar">
+  <div id="left">
+    <div id="track"></div>
+    <div id="artist"></div>
+  </div>
+  <div id="right">
+    <div id="status">--:--</div>
+    <div id="weather">...</div>
+  </div>
+</div>
 
 <script>
 var API_KEY = '522e851180bb217889ddb78f99a76138';
 var USER = 'maxvbur';
 var lastTrack = '';
+var weatherCache = '';
+var weatherLastFetch = 0;
 
 function hiRes(url) {
   if (!url) return '';
   return url.replace(/\/i\/u\/\d+x\d+\//, '/i/u/770x770/');
 }
 
+function now() {
+  var d = new Date();
+  var h = d.getHours(); var m = d.getMinutes();
+  return (h<10?'0'+h:h)+':'+(m<10?'0'+m:m);
+}
+
+function fetchWeather() {
+  var t = Date.now();
+  if (weatherCache && t - weatherLastFetch < 10 * 60 * 1000) {
+    document.getElementById('weather').innerHTML = weatherCache;
+    return;
+  }
+  var url = 'https://api.open-meteo.com/v1/forecast?latitude=-23.55&longitude=-46.63&current_weather=true';
+  var xhr = new XMLHttpRequest();
+  xhr.open('GET', url, true);
+  xhr.onreadystatechange = function() {
+    if (xhr.readyState !== 4 || xhr.status !== 200) return;
+    var d;
+    try { d = JSON.parse(xhr.responseText); } catch(e) { return; }
+    var cw = d.current_weather;
+    if (!cw) return;
+    var temp = Math.round(cw.temperature);
+    var code = cw.weathercode;
+    weatherCache = weatherIcon(code) + ' ' + temp + '°C';
+    weatherLastFetch = Date.now();
+    document.getElementById('weather').innerHTML = weatherCache;
+  };
+  xhr.send();
+}
+
+function weatherIcon(code) {
+  if (code === 0) return 'sol';
+  if (code <= 2) return 'nublado';
+  if (code === 3) return 'fechado';
+  if (code <= 49) return 'neblina';
+  if (code <= 59) return 'garoa';
+  if (code <= 69) return 'chuva';
+  if (code <= 79) return 'neve';
+  if (code <= 82) return 'chuva';
+  if (code <= 84) return 'granizo';
+  if (code <= 99) return 'trovoada';
+  return '';
+}
+
 function update() {
+  document.getElementById('status').innerHTML = now();
+  fetchWeather();
+
   var url = 'https://ws.audioscrobbler.com/2.0/?method=user.getrecenttracks'
     + '&user=' + USER
     + '&api_key=' + API_KEY
@@ -79,10 +169,7 @@ function update() {
   xhr.open('GET', url, true);
   xhr.onreadystatechange = function() {
     if (xhr.readyState !== 4) return;
-    if (xhr.status !== 200) {
-      document.getElementById('status').innerHTML = 'erro ' + xhr.status;
-      return;
-    }
+    if (xhr.status !== 200) return;
     var d;
     try { d = JSON.parse(xhr.responseText); } catch(e) { return; }
 
@@ -96,7 +183,6 @@ function update() {
       document.getElementById('artist').innerHTML = '';
       document.getElementById('cover').style.display = 'none';
       document.getElementById('placeholder').style.display = 'block';
-      document.getElementById('status').innerHTML = now();
       lastTrack = '';
       return;
     }
@@ -104,9 +190,6 @@ function update() {
     var name = t.name || '';
     var artist = (t.artist && t.artist['#text']) || '';
     var key = name + '|' + artist;
-
-    document.getElementById('status').innerHTML = now();
-
     if (key === lastTrack) return;
     lastTrack = key;
 
@@ -125,22 +208,13 @@ function update() {
       cover.src = hiRes(art);
       cover.style.display = 'block';
       ph.style.display = 'none';
-      cover.onerror = function() {
-        cover.onerror = null;
-        cover.src = art;
-      };
+      cover.onerror = function() { cover.onerror = null; cover.src = art; };
     } else {
       cover.style.display = 'none';
       ph.style.display = 'block';
     }
   };
   xhr.send();
-}
-
-function now() {
-  var d = new Date();
-  var h = d.getHours(); var m = d.getMinutes();
-  return (h<10?'0'+h:h)+':'+(m<10?'0'+m:m);
 }
 
 update();
