@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=600, initial-scale=1.0">
 <title>Now Playing</title>
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -10,7 +10,8 @@ body {
   background: #fff;
   font-family: Georgia, serif;
   text-align: center;
-  padding: 10px 10px 6px 10px;
+  width: 600px;
+  padding: 10px;
 }
 #placeholder, #cover {
   width: 560px;
@@ -31,19 +32,21 @@ body {
   object-fit: cover;
 }
 #track {
-  margin-top: 12px;
-  font-size: 1.15em;
+  margin-top: 14px;
+  font-size: 1.35em;
   color: #111;
   line-height: 1.3;
+  padding: 0 10px;
 }
 #artist {
-  margin-top: 5px;
-  font-size: 0.9em;
+  margin-top: 6px;
+  font-size: 1.05em;
   color: #555;
+  padding: 0 10px;
 }
 #status {
-  margin-top: 8px;
-  font-size: 0.65em;
+  margin-top: 10px;
+  font-size: 0.8em;
   color: #111;
 }
 </style>
@@ -63,7 +66,6 @@ var lastTrack = '';
 
 function hiRes(url) {
   if (!url) return '';
-  // Troca o sufixo de tamanho do Last.fm por 770x770
   return url.replace(/\/i\/u\/\d+x\d+\//, '/i/u/770x770/');
 }
 
@@ -124,7 +126,6 @@ function update() {
       cover.style.display = 'block';
       ph.style.display = 'none';
       cover.onerror = function() {
-        // fallback pro tamanho original se o hack falhar
         cover.onerror = null;
         cover.src = art;
       };
