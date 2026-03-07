@@ -44,7 +44,7 @@ body {
 #status {
   margin-top: 8px;
   font-size: 0.65em;
-  color: #bbb;
+  color: #111;
 }
 </style>
 </head>
@@ -60,6 +60,12 @@ body {
 var API_KEY = '522e851180bb217889ddb78f99a76138';
 var USER = 'maxvbur';
 var lastTrack = '';
+
+function hiRes(url) {
+  if (!url) return '';
+  // Troca o sufixo de tamanho do Last.fm por 770x770
+  return url.replace(/\/i\/u\/\d+x\d+\//, '/i/u/770x770/');
+}
 
 function update() {
   var url = 'https://ws.audioscrobbler.com/2.0/?method=user.getrecenttracks'
@@ -114,9 +120,14 @@ function update() {
     var cover = document.getElementById('cover');
     var ph = document.getElementById('placeholder');
     if (art) {
-      cover.src = art;
+      cover.src = hiRes(art);
       cover.style.display = 'block';
       ph.style.display = 'none';
+      cover.onerror = function() {
+        // fallback pro tamanho original se o hack falhar
+        cover.onerror = null;
+        cover.src = art;
+      };
     } else {
       cover.style.display = 'none';
       ph.style.display = 'block';
@@ -127,8 +138,8 @@ function update() {
 
 function now() {
   var d = new Date();
-  var h = d.getHours(); var m = d.getMinutes(); var s = d.getSeconds();
-  return (h<10?'0'+h:h)+':'+(m<10?'0'+m:m)+':'+(s<10?'0'+s:s);
+  var h = d.getHours(); var m = d.getMinutes();
+  return (h<10?'0'+h:h)+':'+(m<10?'0'+m:m);
 }
 
 update();
