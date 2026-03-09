@@ -243,7 +243,8 @@ function update() {
       if (imgs[i]['#text'] && imgs[i]['#text'] !== '') { art = imgs[i]['#text']; break; }
     }
 
-    if (art) {
+    var LASTFM_DEFAULT = '2a96cbd8b46e442fc41c2b86b821562f.png';
+    if (art && art.indexOf(LASTFM_DEFAULT) === -1) {
       loadCover(hiRes(art), art);
     } else {
       document.getElementById('cover').style.display = 'none';
