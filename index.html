@@ -251,8 +251,7 @@ function update() {
     if (art && art.indexOf(LASTFM_DEFAULT) === -1) {
       loadCover(hiRes(art), art);
     } else {
-      document.getElementById('cover').style.display = 'none';
-      document.getElementById('placeholder').style.display = 'block';
+      showFallback();
     }
   };
   xhr.send();
