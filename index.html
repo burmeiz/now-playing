@@ -137,6 +137,16 @@ function randomFallback() {
   return FALLBACKS[Math.floor(Math.random() * FALLBACKS.length)];
 }
 
+function showFallback() {
+  var cover = document.getElementById('cover');
+  var ph = document.getElementById('placeholder');
+  cover.onload = null;
+  cover.onerror = null;
+  cover.src = randomFallback();
+  cover.style.display = 'block';
+  ph.style.display = 'none';
+}
+
 function loadCover(src, fallback) {
   var cover = document.getElementById('cover');
   var ph = document.getElementById('placeholder');
@@ -146,14 +156,10 @@ function loadCover(src, fallback) {
   };
   cover.onerror = function() {
     if (fallback && src !== fallback) {
-      cover.onerror = function() {
-        cover.src = randomFallback();
-        cover.onerror = null;
-      };
+      cover.onerror = function() { showFallback(); };
       cover.src = fallback;
     } else {
-      cover.src = randomFallback();
-      cover.onerror = null;
+      showFallback();
     }
   };
   cover.src = src;
@@ -221,9 +227,7 @@ function update() {
     if (!playing) {
       document.getElementById('track').innerHTML = 'nada tocando';
       document.getElementById('artist').innerHTML = '';
-      document.getElementById('cover').src = randomFallback();
-      document.getElementById('cover').style.display = 'block';
-      document.getElementById('placeholder').style.display = 'none';
+      showFallback();
       lastTrack = '';
       return;
     }
