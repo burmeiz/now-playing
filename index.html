@@ -117,6 +117,7 @@ var FALLBACKS = [
 var API_KEY = '522e851180bb217889ddb78f99a76138';
 var USER = 'maxvbur';
 var lastTrack = '';
+var fallbackSrc = '';
 var weatherCache = '';
 var weatherLastFetch = 0;
 
@@ -140,9 +141,10 @@ function randomFallback() {
 function showFallback() {
   var cover = document.getElementById('cover');
   var ph = document.getElementById('placeholder');
+  if (!fallbackSrc) fallbackSrc = randomFallback();
   cover.onload = null;
   cover.onerror = null;
-  cover.src = randomFallback();
+  cover.src = fallbackSrc;
   cover.style.display = 'block';
   ph.style.display = 'none';
 }
@@ -237,6 +239,7 @@ function update() {
     var key = name + '|' + artist;
     if (key === lastTrack) return;
     lastTrack = key;
+    fallbackSrc = '';
 
     document.getElementById('track').innerHTML = name;
     document.getElementById('artist').innerHTML = artist;
