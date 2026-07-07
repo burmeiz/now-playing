@@ -57,9 +57,12 @@ body {
 }
 #track {
   font-family: 'DM Serif Display', serif;
-  font-size: 1.5em;
+  font-size: 2.4em;
   color: #000;
   line-height: 1.25;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 #artist {
   margin-top: 4px;
@@ -108,6 +111,18 @@ var API_KEY = '522e851180bb217889ddb78f99a76138';
 var USER = 'maxvbur';
 var lastTrack = '';
 var fallbackSrc = '';
+var TRACK_MAX_EM = 2.4;
+var TRACK_MIN_EM = 1.2;
+
+function fitTrackFont() {
+  var el = document.getElementById('track');
+  var size = TRACK_MAX_EM;
+  el.style.fontSize = size + 'em';
+  while (el.scrollWidth > el.clientWidth && size > TRACK_MIN_EM) {
+    size -= 0.1;
+    el.style.fontSize = size.toFixed(2) + 'em';
+  }
+}
 
 function hiRes(url) {
   if (!url) return '';
@@ -155,9 +170,11 @@ function loadCover(src, fallback) {
   cover.src = src;
 }
 
-function update() {
+function updateClock() {
   document.getElementById('status').innerHTML = now();
+}
 
+function updateTrack() {
   var url = 'https://ws.audioscrobbler.com/2.0/?method=user.getrecenttracks'
     + '&user=' + USER
     + '&api_key=' + API_KEY
@@ -179,6 +196,7 @@ function update() {
     if (!playing) {
       document.getElementById('track').innerHTML = 'nada tocando';
       document.getElementById('artist').innerHTML = '';
+      fitTrackFont();
       showFallback();
       lastTrack = '';
       return;
@@ -193,6 +211,7 @@ function update() {
 
     document.getElementById('track').innerHTML = name;
     document.getElementById('artist').innerHTML = artist;
+    fitTrackFont();
 
     var imgs = t.image || [];
     var art = '';
@@ -210,8 +229,14 @@ function update() {
   xhr.send();
 }
 
-update();
-setInterval(update, 15000);
+updateClock();
+setTimeout(function() {
+  updateClock();
+  setInterval(updateClock, 60000);
+}, 60000 - (Date.now() % 60000));
+
+updateTrack();
+setInterval(updateTrack, 10000);
 </script>
 </body>
 </html>
