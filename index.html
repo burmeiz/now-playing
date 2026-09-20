@@ -4,7 +4,6 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=600, initial-scale=1.0">
 <title>Now Playing</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:wght@300&display=swap" rel="stylesheet">
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -12,14 +11,19 @@ body {
   background: #fff;
   width: 600px;
   padding: 10px;
-  font-family: 'DM Sans', sans-serif;
+  font-family: 'DM Sans', Helvetica, sans-serif;
   font-weight: 300;
 }
-#placeholder, #cover {
+#art {
+  width: 560px;
+  height: 560px;
+  margin: 0 auto;
+  position: relative;
+}
+#placeholder, #art img {
   width: 560px;
   height: 560px;
   display: block;
-  margin: 0 auto;
 }
 #placeholder {
   background: #f5f5f5;
@@ -28,14 +32,10 @@ body {
   font-size: 80px;
   color: #ddd;
   text-align: center;
-  font-family: 'DM Serif Display', serif;
+  font-family: 'DM Serif Display', Georgia, serif;
 }
-#cover {
-  display: none;
+#art img {
   border: 1px solid #eee;
-  object-fit: cover;
-  -webkit-filter: grayscale(100%);
-  filter: grayscale(100%);
 }
 #infobar {
   width: 560px;
@@ -56,7 +56,7 @@ body {
   width: 220px;
 }
 #track {
-  font-family: 'DM Serif Display', serif;
+  font-family: 'DM Serif Display', Georgia, serif;
   font-size: 2.4em;
   color: #000;
   line-height: 1.25;
@@ -66,7 +66,7 @@ body {
 }
 #artist {
   margin-top: 4px;
-  font-family: 'DM Sans', sans-serif;
+  font-family: 'DM Sans', Helvetica, sans-serif;
   font-weight: 300;
   font-size: 1em;
   color: #111;
@@ -74,7 +74,7 @@ body {
   text-transform: uppercase;
 }
 #status {
-  font-family: 'DM Serif Display', serif;
+  font-family: 'DM Serif Display', Georgia, serif;
   font-style: italic;
   font-size: 3.4em;
   line-height: 1;
@@ -85,8 +85,7 @@ body {
 </head>
 <body>
 
-<div id="placeholder">♪</div>
-<img id="cover" alt="">
+<div id="art"><div id="placeholder">&#9834;</div></div>
 
 <div id="infobar">
   <div id="left">
@@ -99,6 +98,19 @@ body {
 </div>
 
 <script>
+/* ---------- config ---------- */
+var CFG = {
+  POLL_MS:     20000,          // intervalo de consulta ao Last.fm
+  CLOCK_MS:    60000,          // relogio
+  RELOAD_MS:   30 * 60 * 1000, // reload preventivo: zera o heap do browser
+  XHR_TIMEOUT: 8000,           // aborta requisicao travada
+  FAIL_LIMIT:  10,             // falhas seguidas -> reload (wifi morreu)
+  ART_PX:      600             // tamanho da capa pedido ao Last.fm
+};
+
+var API_KEY = '522e851180bb217889ddb78f99a76138';
+var USER = 'maxvbur';
+
 var FALLBACKS = [
   "img/fallback1.jpg",
   "img/fallback2.jpg",
@@ -106,137 +118,202 @@ var FALLBACKS = [
   "img/fallback4.jpg",
   "img/fallback5.jpg"
 ];
+var LASTFM_DEFAULT = '2a96cbd8b46e442fc41c2b86b821562f.png';
 
-var API_KEY = '522e851180bb217889ddb78f99a76138';
-var USER = 'maxvbur';
 var lastTrack = '';
 var fallbackSrc = '';
-var TRACK_MAX_EM = 2.4;
-var TRACK_MIN_EM = 1.2;
+var inFlight = false;
+var failCount = 0;
+var bootTime = new Date().getTime();
 
-function fitTrackFont() {
-  var el = document.getElementById('track');
-  var size = TRACK_MAX_EM;
-  el.style.fontSize = size + 'em';
-  while (el.scrollWidth > el.clientWidth && size > TRACK_MIN_EM) {
-    size -= 0.1;
-    el.style.fontSize = size.toFixed(2) + 'em';
+function $(id) { return document.getElementById(id); }
+
+/* ---------- capa ----------
+   Cada troca de capa destroi a <img> antiga e cria uma nova.
+   Reaproveitar a mesma tag deixa o bitmap decodificado preso
+   no WebKit antigo do Kindle -> vazamento ate o crash.          */
+function swapArt(node) {
+  var box = $('art');
+  var old = box.firstChild;
+  if (old) {
+    if (old.tagName === 'IMG') {
+      old.onload = null;
+      old.onerror = null;
+      old.src = 'data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==';
+    }
+    box.removeChild(old);
   }
+  box.appendChild(node);
 }
 
-function hiRes(url) {
+function placeholderNode() {
+  var d = document.createElement('div');
+  d.id = 'placeholder';
+  d.innerHTML = '&#9834;';
+  return d;
+}
+
+function showFallback() {
+  if (!fallbackSrc) {
+    fallbackSrc = FALLBACKS[Math.floor(Math.random() * FALLBACKS.length)];
+  }
+  var img = new Image();
+  img.onload = function() { this.onload = null; this.onerror = null; swapArt(this); };
+  img.onerror = function() { this.onload = null; this.onerror = null; swapArt(placeholderNode()); };
+  img.src = fallbackSrc;
+}
+
+function artUrl(url) {
   if (!url) return '';
-  return url.replace(/\/i\/u\/\d+x\d+\//, '/i/u/770x770/');
+  return url.replace(/\/i\/u\/\d+x\d+\//, '/i/u/' + CFG.ART_PX + 'x' + CFG.ART_PX + '/');
 }
 
+function loadCover(src, backup) {
+  var img = new Image();
+  img.onload = function() { this.onload = null; this.onerror = null; swapArt(this); };
+  img.onerror = function() {
+    this.onload = null;
+    this.onerror = null;
+    if (backup && src !== backup) { loadCover(backup, null); }
+    else { showFallback(); }
+  };
+  img.src = src;
+}
+
+/* ---------- tipografia ----------
+   Sem loop de scrollWidth: cada leitura forcava um reflow sincrono.
+   Aproximacao por contagem de caracteres resolve igual na parede.  */
+function fitTrackFont(text) {
+  var n = text.length;
+  var size;
+  if (n <= 14)      size = 2.4;
+  else if (n <= 18) size = 2.0;
+  else if (n <= 24) size = 1.7;
+  else if (n <= 32) size = 1.4;
+  else              size = 1.2;
+  $('track').style.fontSize = size + 'em';
+}
+
+/* ---------- relogio ---------- */
 function now() {
   var d = new Date();
   var utc = d.getTime() + d.getTimezoneOffset() * 60000;
   var br = new Date(utc - 3 * 3600000);
-  var h = br.getHours(); var m = br.getMinutes();
-  return (h<10?'0'+h:h)+':'+(m<10?'0'+m:m);
-}
-
-function randomFallback() {
-  return FALLBACKS[Math.floor(Math.random() * FALLBACKS.length)];
-}
-
-function showFallback() {
-  var cover = document.getElementById('cover');
-  var ph = document.getElementById('placeholder');
-  if (!fallbackSrc) fallbackSrc = randomFallback();
-  cover.onload = null;
-  cover.onerror = null;
-  cover.src = fallbackSrc;
-  cover.style.display = 'block';
-  ph.style.display = 'none';
-}
-
-function loadCover(src, fallback) {
-  var cover = document.getElementById('cover');
-  var ph = document.getElementById('placeholder');
-  cover.onload = function() {
-    cover.style.display = 'block';
-    ph.style.display = 'none';
-  };
-  cover.onerror = function() {
-    if (fallback && src !== fallback) {
-      cover.onerror = function() { showFallback(); };
-      cover.src = fallback;
-    } else {
-      showFallback();
-    }
-  };
-  cover.src = src;
+  var h = br.getHours(), m = br.getMinutes();
+  return (h < 10 ? '0' + h : h) + ':' + (m < 10 ? '0' + m : m);
 }
 
 function updateClock() {
-  document.getElementById('status').innerHTML = now();
+  var el = $('status');
+  var t = now();
+  if (el.innerHTML !== t) el.innerHTML = t;  // evita repaint eink a toa
 }
 
+/* ---------- last.fm ---------- */
 function updateTrack() {
+  // reload preventivo, num momento em que nada esta carregando
+  if (new Date().getTime() - bootTime > CFG.RELOAD_MS) {
+    window.location.reload();
+    return;
+  }
+  if (inFlight) return;
+  inFlight = true;
+
   var url = 'https://ws.audioscrobbler.com/2.0/?method=user.getrecenttracks'
     + '&user=' + USER
     + '&api_key=' + API_KEY
-    + '&format=json&limit=1';
+    + '&format=json&limit=1&nocache=' + new Date().getTime();
 
   var xhr = new XMLHttpRequest();
+  var done = false;
+
+  var killer = setTimeout(function() {
+    if (done) return;
+    done = true;
+    inFlight = false;
+    failCount++;
+    try { xhr.abort(); } catch (e) {}
+    xhr.onreadystatechange = null;
+    if (failCount >= CFG.FAIL_LIMIT) window.location.reload();
+  }, CFG.XHR_TIMEOUT);
+
   xhr.open('GET', url, true);
   xhr.onreadystatechange = function() {
-    if (xhr.readyState !== 4) return;
-    if (xhr.status !== 200) return;
-    var d;
-    try { d = JSON.parse(xhr.responseText); } catch(e) { return; }
+    if (xhr.readyState !== 4 || done) return;
+    done = true;
+    clearTimeout(killer);
+    inFlight = false;
 
-    var tracks = d.recenttracks && d.recenttracks.track;
-    if (!tracks) return;
-    var t = tracks.length ? tracks[0] : tracks;
+    var text = xhr.status === 200 ? xhr.responseText : null;
+    xhr.onreadystatechange = null;   // solta a closure
 
-    var playing = t['@attr'] && t['@attr'].nowplaying === 'true';
-    if (!playing) {
-      document.getElementById('track').innerHTML = 'nada tocando';
-      document.getElementById('artist').innerHTML = '';
-      fitTrackFont();
-      showFallback();
-      lastTrack = '';
+    if (!text) {
+      failCount++;
+      if (failCount >= CFG.FAIL_LIMIT) window.location.reload();
       return;
     }
+    failCount = 0;
 
-    var name = t.name || '';
-    var artist = (t.artist && t.artist['#text']) || '';
-    var key = name + '|' + artist;
-    if (key === lastTrack) return;
-    lastTrack = key;
-    fallbackSrc = '';
+    var d;
+    try { d = JSON.parse(text); } catch (e) { return; }
+    text = null;
 
-    document.getElementById('track').innerHTML = name;
-    document.getElementById('artist').innerHTML = artist;
-    fitTrackFont();
-
-    var imgs = t.image || [];
-    var art = '';
-    for (var i = imgs.length - 1; i >= 0; i--) {
-      if (imgs[i]['#text'] && imgs[i]['#text'] !== '') { art = imgs[i]['#text']; break; }
-    }
-
-    var LASTFM_DEFAULT = '2a96cbd8b46e442fc41c2b86b821562f.png';
-    if (art && art.indexOf(LASTFM_DEFAULT) === -1) {
-      loadCover(hiRes(art), art);
-    } else {
-      showFallback();
-    }
+    render(d);
+    d = null;
   };
   xhr.send();
 }
 
+function render(d) {
+  var tracks = d.recenttracks && d.recenttracks.track;
+  if (!tracks) return;
+  var t = tracks.length ? tracks[0] : tracks;
+
+  var playing = t['@attr'] && t['@attr'].nowplaying === 'true';
+  if (!playing) {
+    if (lastTrack === '__idle__') return;   // ja esta ocioso, nao repinta
+    lastTrack = '__idle__';
+    $('track').innerHTML = 'nada tocando';
+    $('artist').innerHTML = '';
+    fitTrackFont('nada tocando');
+    fallbackSrc = '';
+    showFallback();
+    return;
+  }
+
+  var name = t.name || '';
+  var artist = (t.artist && t.artist['#text']) || '';
+  var key = name + '|' + artist;
+  if (key === lastTrack) return;
+  lastTrack = key;
+  fallbackSrc = '';
+
+  $('track').innerHTML = name;
+  $('artist').innerHTML = artist;
+  fitTrackFont(name);
+
+  var imgs = t.image || [];
+  var art = '';
+  for (var i = imgs.length - 1; i >= 0; i--) {
+    if (imgs[i]['#text'] && imgs[i]['#text'] !== '') { art = imgs[i]['#text']; break; }
+  }
+
+  if (art && art.indexOf(LASTFM_DEFAULT) === -1) {
+    loadCover(artUrl(art), art);
+  } else {
+    showFallback();
+  }
+}
+
+/* ---------- boot ---------- */
 updateClock();
 setTimeout(function() {
   updateClock();
-  setInterval(updateClock, 60000);
-}, 60000 - (Date.now() % 60000));
+  setInterval(updateClock, CFG.CLOCK_MS);
+}, CFG.CLOCK_MS - (new Date().getTime() % CFG.CLOCK_MS));
 
 updateTrack();
-setInterval(updateTrack, 10000);
+setInterval(updateTrack, CFG.POLL_MS);
 </script>
 </body>
 </html>
